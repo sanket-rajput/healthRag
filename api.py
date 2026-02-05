@@ -62,10 +62,12 @@ app = FastAPI(
 )
 
 # =============================
-# LOAD VECTOR DB (ON STARTUP)
+# LOAD VECTOR DB (CPU ONLY)
 # =============================
+# 🔥 CRITICAL: force CPU to avoid CUDA / GPU memory usage on Render
 embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
+    model_name="sentence-transformers/all-MiniLM-L6-v2",
+    model_kwargs={"device": "cpu"},
 )
 
 db = FAISS.load_local(
@@ -106,7 +108,7 @@ def emergency_guard(question: str):
 # RETRIEVAL (MMR + POST FILTER)
 # =============================
 def retrieve_context(question: str):
-    # Step 1: Broad retrieval from FAISS
+    # Step 1: Broad retrieval from FAISS (no regex, FAISS-safe)
     docs = db.max_marginal_relevance_search(
         question,
         k=FETCH_K,
@@ -121,7 +123,7 @@ def retrieve_context(question: str):
         if not any(bad in src for bad in BAD_SOURCE_KEYWORDS):
             clean_docs.append(doc)
 
-    # Step 3: Take top K clean docs
+    # Step 3: Keep top K clean docs
     clean_docs = clean_docs[:TOP_K]
 
     if not clean_docs:
@@ -134,7 +136,7 @@ def retrieve_context(question: str):
 
 
 # =============================
-# LLM CALL
+# LLM CALL (OPENROUTER)
 # =============================
 def call_openrouter(context: str, question: str):
     headers = {
@@ -165,15 +167,15 @@ def call_openrouter(context: str, question: str):
         "max_tokens": MAX_TOKENS,
     }
 
-    r = requests.post(
+    response = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
         headers=headers,
         json=payload,
         timeout=30,
     )
 
-    r.raise_for_status()
-    return r.json()["choices"][0]["message"]["content"]
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"]
 
 
 # =============================
@@ -195,7 +197,7 @@ def ask_question(data: AskRequest):
             disclaimer="Emergency response triggered",
         )
 
-    # Retrieval
+    # Retrieve context
     context, sources = retrieve_context(question)
 
     if not context:

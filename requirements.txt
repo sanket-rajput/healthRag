@@ -4,7 +4,10 @@ requests
 python-dotenv
 
 faiss-cpu
-sentence-transformers
+numpy
+
+sentence-transformers==2.7.0
+torch==2.1.2+cpu ; platform_system != "Windows"
 
 langchain-community
 langchain-text-splitters
