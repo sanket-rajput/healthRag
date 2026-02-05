@@ -1,3 +1,5 @@
+python-3.10.13
+
 fastapi
 uvicorn
 requests
